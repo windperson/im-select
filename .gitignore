@@ -35,3 +35,6 @@
 *xcuserdata
 .DS_Store
 
+
+################## test build artifacts #################
+*-tests.exe

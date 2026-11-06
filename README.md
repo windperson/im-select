@@ -146,6 +146,37 @@ The im-select.exe is command line program, but it can't work in cmd or powershel
 
 ## Run tests
 
+### Windows unit tests
+
+See [the Windows unit test README](win/tests/README.md) for prerequisites,
+architecture-specific commands, expected results, and troubleshooting.
+
+With Visual Studio's Desktop development with C++ workload and a Windows SDK
+installed, run from the repository root:
+
+```powershell
+.\win\tests\run-tests.ps1
+```
+
+The script selects the current process architecture by default. To test a specific
+target, install its MSVC build tools and run, for example:
+
+```powershell
+.\win\tests\run-tests.ps1 -Architecture arm64
+```
+
+Supported targets are `arm64`, `x64`, and `x86`; the machine must also be able to
+execute the selected target. No third-party test framework is required. Build
+outputs are created in a temporary directory and removed after each run.
+
+These tests compile the existing Windows implementation with mocked Windows APIs
+and console output. They cover language ID extraction (including pointer-width
+handling), foreground-window/thread selection, language-change messages, and CLI
+behavior without changing the real keyboard layout. Characterization tests also
+record current edge cases: permissive `atoi` parsing, ignored extra arguments,
+posting with no foreground window, and ignored `PostMessage` failures. They do
+not verify actual OS input-method switching or introduce ARM64 solution settings.
+
 ### To get current keyboard locale
 
 ```shell
@@ -184,4 +215,3 @@ Buy me a coffee, if you like it! If you have any problems, you can contact me vi
 ## 📝 License
 
 This project is licensed under the terms of the MIT license.
-
