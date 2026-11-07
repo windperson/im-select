@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+	<ProjectConfiguration Include="Debug|Win32"><Configuration>Debug</Configuration><Platform>Win32</Platform></ProjectConfiguration>
+	<ProjectConfiguration Include="Release|Win32"><Configuration>Release</Configuration><Platform>Win32</Platform></ProjectConfiguration>
+	<ProjectConfiguration Include="Debug|x64"><Configuration>Debug</Configuration><Platform>x64</Platform></ProjectConfiguration>
+	<ProjectConfiguration Include="Release|x64"><Configuration>Release</Configuration><Platform>x64</Platform></ProjectConfiguration>
+	<ProjectConfiguration Include="Debug|ARM64"><Configuration>Debug</Configuration><Platform>ARM64</Platform></ProjectConfiguration>
+	<ProjectConfiguration Include="Release|ARM64"><Configuration>Release</Configuration><Platform>ARM64</Platform></ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+	<ProjectGuid>{C1BB7D70-0439-40F0-867A-41A819215C29}</ProjectGuid>
+	<Keyword>Win32Proj</Keyword>
+	<RootNamespace>ImSelectTests</RootNamespace>
+	<WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+	<ProjectSubType>NativeUnitTestProject</ProjectSubType>
+	<IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+	<ConfigurationType>DynamicLibrary</ConfigurationType>
+	<PlatformToolset>v145</PlatformToolset>
+	<CharacterSet>Unicode</CharacterSet>
+	<UseDebugLibraries Condition="'$(Configuration)'=='Debug'">true</UseDebugLibraries>
+	<UseDebugLibraries Condition="'$(Configuration)'=='Release'">false</UseDebugLibraries>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup>
+	<TestFrameworkArchitecture Condition="'$(Platform)'=='Win32'">x86</TestFrameworkArchitecture>
+	<TestFrameworkArchitecture Condition="'$(Platform)'=='x64'">x64</TestFrameworkArchitecture>
+	<TestFrameworkArchitecture Condition="'$(Platform)'=='ARM64'">ARM64</TestFrameworkArchitecture>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+	<ClCompile>
+	  <WarningLevel>Level4</WarningLevel>
+	  <PrecompiledHeader>NotUsing</PrecompiledHeader>
+	  <ExceptionHandling>Sync</ExceptionHandling>
+	  <LanguageStandard>stdcpp14</LanguageStandard>
+	  <AdditionalIncludeDirectories>$(VCInstallDir)Auxiliary\VS\UnitTest\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+	</ClCompile>
+	<Link>
+	  <GenerateDebugInformation>true</GenerateDebugInformation>
+	  <AdditionalLibraryDirectories>$(VCInstallDir)Auxiliary\VS\UnitTest\lib\$(TestFrameworkArchitecture);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+	  <AdditionalDependencies>Microsoft.VisualStudio.TestTools.CppUnitTestFramework.lib;%(AdditionalDependencies)</AdditionalDependencies>
+	</Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+	<ClCompile Include="im-select-test-explorer.cpp" />
+	<None Include="im-select-tests.cpp" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

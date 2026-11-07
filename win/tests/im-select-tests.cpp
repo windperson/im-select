@@ -25,7 +25,14 @@ struct FakeWindows {
     std::string errorOutput;
 };
 
-FakeWindows state;
+thread_local FakeWindows state;
+#ifdef IM_SELECT_TEST_EXPLORER
+#define IM_SELECT_WIDEN_INNER(value) L##value
+#define IM_SELECT_WIDEN(value) IM_SELECT_WIDEN_INNER(value)
+#define CHECK(condition) \
+    Microsoft::VisualStudio::CppUnitTestFramework::Assert::IsTrue( \
+        !!(condition), IM_SELECT_WIDEN(#condition), LINE_INFO())
+#else
 int failures = 0;
 
 #define CHECK(condition) \
@@ -35,6 +42,7 @@ int failures = 0;
             ++failures; \
         } \
     } while (false)
+#endif
 
 HWND fakeGetForegroundWindow() {
     ++state.foregroundCalls;
@@ -299,6 +307,7 @@ void cliReportsQueryFailures() {
 }
 }
 
+#ifndef IM_SELECT_TEST_EXPLORER
 int main() {
     struct Test {
         const char* name;
@@ -341,3 +350,4 @@ int main() {
     std::printf("%d passed, %d failed\n", passed, failed);
     return failed == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }
+#endif

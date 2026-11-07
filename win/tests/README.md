@@ -12,7 +12,8 @@
 
 No third-party test framework is required. The runner locates Visual Studio using
 `vswhere.exe` and configures the compiler automatically; a Developer PowerShell
-session is not required.
+session is not required. The x86 and x64 solution builds also require Visual
+Studio's native C++ unit test framework.
 
 ## Run the tests
 
@@ -64,6 +65,18 @@ which can be used in automation:
 ```powershell
 pwsh -NoProfile -File .\win\tests\run-tests.ps1 -Architecture arm64
 ```
+
+## Visual Studio Test Explorer
+
+1. Open `win/im-select/im-select.sln` in Visual Studio.
+2. Select an x86 or x64 solution configuration and build the solution.
+3. Open **Test > Test Explorer** to discover, run, or debug the individual
+   `ImSelectTests.WindowsUnitTests` methods.
+
+These methods reuse the same mocked test cases as the PowerShell runner. The
+interactive integration test is not included in Test Explorer. The test project
+also defines ARM64 configurations, but the solution does not yet expose an
+ARM64 configuration; use the PowerShell runner for ARM64 unit tests.
 
 ## Optional integration test
 
