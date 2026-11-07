@@ -7,6 +7,7 @@
   C++** workload and a Windows SDK.
 - MSVC build tools for the target architecture (`arm64`, `x64`, or `x86`).
   For ARM64, install the ARM64 C++ build tools in Visual Studio Installer.
+- MSBuild in the selected Visual Studio installation for production solution builds.
 - The machine must be able to execute binaries for the selected architecture.
 
 No third-party test framework is required. The runner locates Visual Studio using
@@ -36,9 +37,14 @@ To select a target explicitly, run one of these commands from the repository roo
 .\win\tests\run-tests.ps1 -Architecture x86
 ```
 
-Each invocation builds and runs the entire suite for one architecture. Build
-files go into a unique temporary directory and are removed after the run. No
-changes to the Visual Studio solution or project settings are necessary.
+Each invocation builds and runs the entire suite for one architecture. For x86
+and x64, it first builds the matching Release configuration of the production
+solution. The solution currently has no ARM64 configuration, so an ARM64 run
+warns that the production build was skipped and still runs the unit tests.
+Test files go into a unique temporary directory; production build files go into
+a unique directory under `win/tests` to avoid MSBuild's temporary-directory
+warning. Both directories are removed after the run. No changes to the Visual
+Studio solution or project settings are necessary.
 
 ## Expected results
 
@@ -50,13 +56,23 @@ PASS: reads foreground thread layout
 14 passed, 0 failed
 ```
 
-The runner throws an error if compilation or a test fails. When invoked with
+The runner throws an error if the production build, test compilation, or a test
+fails. When invoked with
 `powershell -File` or `pwsh -File`, this produces a nonzero process exit code,
 which can be used in automation:
 
 ```powershell
 pwsh -NoProfile -File .\win\tests\run-tests.ps1 -Architecture arm64
 ```
+
+## Continuous integration
+
+The [Windows tests workflow](../../.github/workflows/windows-tests.yml) runs on
+pushes, pull requests, and manual dispatch. It uses Visual Studio 2026 hosted
+images to run x86 and x64 tests on Windows Server 2025 and ARM64 tests on a
+native Windows 11 ARM64 runner. The x86 and x64 jobs also build the matching
+Release production solution; the ARM64 job only builds and runs the tests.
+Runner availability and usage limits depend on the repository and GitHub plan.
 
 ## Coverage and limitations
 
@@ -75,7 +91,8 @@ permissive `atoi` parsing, posting with no foreground window, and ignoring
 `PostMessage` failures. These are baseline observations, not recommended policies.
 
 Tests do not change your keyboard layout or verify real OS input-method
-switching. They also do not validate the production solution's build settings.
+switching. The production solution build validates the Release configuration for
+x86 and x64; it does not validate Debug or an ARM64 production configuration.
 
 ## Troubleshooting
 
