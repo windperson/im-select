@@ -33,12 +33,34 @@ $compilerArchitecture = if ($hostArchitecture -eq $targetArchitecture) {
     "${hostArchitecture}_${targetArchitecture}"
 }
 $source = Join-Path $PSScriptRoot 'im-select-tests.cpp'
+$solution = Join-Path $PSScriptRoot '..\im-select\im-select.sln'
+$msbuild = Join-Path (Split-Path -Parent $setup) '..\..\..\MSBuild\Current\Bin\MSBuild.exe'
 $buildDirectory = Join-Path ([System.IO.Path]::GetTempPath()) (
     'im-select-tests-' + [guid]::NewGuid().ToString('N')
+)
+$solutionBuildDirectory = Join-Path $PSScriptRoot (
+    '.im-select-build-' + [guid]::NewGuid().ToString('N')
 )
 New-Item -ItemType Directory -Path $buildDirectory | Out-Null
 
 try {
+    if ($Architecture -eq 'arm64') {
+        Write-Warning 'Skipping the production solution build: it does not define an ARM64 configuration.'
+    } else {
+        if (-not (Test-Path -LiteralPath $msbuild)) {
+            throw 'MSBuild was not found in the selected Visual Studio installation.'
+        }
+        Write-Output "Building the production solution (Release|$Architecture)"
+        New-Item -ItemType Directory -Path $solutionBuildDirectory | Out-Null
+        $outputDirectory = (Join-Path $solutionBuildDirectory 'output') + '\'
+        $intermediateDirectory = (Join-Path $solutionBuildDirectory 'intermediate') + '\'
+        & $msbuild $solution /nologo /t:Build '/p:Configuration=Release' "/p:Platform=$Architecture" `
+            "/p:OutDir=$outputDirectory" "/p:IntDir=$intermediateDirectory"
+        if ($LASTEXITCODE -ne 0) {
+            throw "Production solution build failed (exit code $LASTEXITCODE)."
+        }
+    }
+
     Write-Output "Building and running Windows unit tests ($Architecture)"
     $command = 'call "{0}" {1} >nul && cd /d "{2}" && cl /nologo /EHsc /std:c++14 /W4 /MT /Od /DUNICODE /D_UNICODE /Fe:im-select-tests.exe "{3}" && im-select-tests.exe' -f (
         $setup, $compilerArchitecture, $buildDirectory, $source
@@ -48,16 +70,20 @@ try {
         throw "Windows unit test build or execution failed (exit code $LASTEXITCODE)."
     }
 } finally {
-    for ($attempt = 1; $attempt -le 5; ++$attempt) {
-        try {
-            Remove-Item -LiteralPath $buildDirectory -Recurse -Force
-            break
-        } catch [System.IO.IOException], [System.UnauthorizedAccessException] {
-            if ($attempt -eq 5) {
-                throw
+    foreach ($directory in @($buildDirectory, $solutionBuildDirectory)) {
+        if (Test-Path -LiteralPath $directory) {
+            for ($attempt = 1; $attempt -le 5; ++$attempt) {
+                try {
+                    Remove-Item -LiteralPath $directory -Recurse -Force
+                    break
+                } catch [System.IO.IOException], [System.UnauthorizedAccessException] {
+                    if ($attempt -eq 5) {
+                        throw
+                    }
+                    Write-Warning "Build files are still in use; retrying cleanup ($attempt/5)."
+                    Start-Sleep -Milliseconds (200 * $attempt)
+                }
             }
-            Write-Warning "Build files are still in use; retrying cleanup ($attempt/5)."
-            Start-Sleep -Milliseconds (200 * $attempt)
         }
     }
 }
