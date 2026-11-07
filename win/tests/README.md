@@ -65,6 +65,28 @@ which can be used in automation:
 pwsh -NoProfile -File .\win\tests\run-tests.ps1 -Architecture arm64
 ```
 
+## Optional integration test
+
+Run the integration test from an active, unlocked Windows desktop using x86 or
+x64. It builds the production executable and runs the unit tests first:
+
+```powershell
+.\win\tests\run-tests.ps1 -Architecture x64 -Integration
+```
+
+The test briefly opens a window and must make it the foreground window. Do not
+switch windows while it runs: the production executable targets whichever
+window is foreground, so a focus change could direct its request elsewhere.
+The test checks focus before and after each invocation and fails if it cannot
+reliably use its own window. It attempts to restore the previous foreground
+window afterward.
+
+The test checks the actual CLI output and intercepts the language-change
+request in its own window without applying it. It verifies message delivery,
+not whether Windows or an IME would accept the request or switch layouts. It is
+not part of the default test run or CI. ARM64 integration testing is unavailable
+until the production solution has an ARM64 configuration.
+
 ## Continuous integration
 
 The [Windows tests workflow](../../.github/workflows/windows-tests.yml) runs on
@@ -90,7 +112,7 @@ Characterization tests intentionally preserve current behavior, including
 permissive `atoi` parsing, posting with no foreground window, and ignoring
 `PostMessage` failures. These are baseline observations, not recommended policies.
 
-Tests do not change your keyboard layout or verify real OS input-method
+The mocked tests do not change your keyboard layout or verify real OS input-method
 switching. The production solution build validates the Release configuration for
 x86 and x64; it does not validate Debug or an ARM64 production configuration.
 

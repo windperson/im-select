@@ -4,10 +4,14 @@ param(
         'ARM64' { 'arm64' }
         'AMD64' { 'x64' }
         default { 'x86' }
-    })
+    }),
+    [switch]$Integration
 )
 
 $ErrorActionPreference = 'Stop'
+if ($Integration -and $Architecture -eq 'arm64') {
+    throw 'Integration tests require an x86 or x64 production solution configuration; ARM64 is not currently supported.'
+}
 $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
 if (-not (Test-Path -LiteralPath $vswhere)) {
     throw 'Visual Studio Installer (vswhere.exe) is required to locate the C++ build tools.'
@@ -68,6 +72,19 @@ try {
     & $env:ComSpec /d /c $command
     if ($LASTEXITCODE -ne 0) {
         throw "Windows unit test build or execution failed (exit code $LASTEXITCODE)."
+    }
+
+    if ($Integration) {
+        Write-Output "Building and running interactive Windows integration tests ($Architecture)"
+        $integrationSource = Join-Path $PSScriptRoot 'im-select-integration-tests.cpp'
+        $productionExecutable = Join-Path $outputDirectory 'im-select.exe'
+        $command = 'call "{0}" {1} >nul && cd /d "{2}" && cl /nologo /EHsc /std:c++14 /W4 /WX /MT /DUNICODE /D_UNICODE /Fe:im-select-integration-tests.exe "{3}" user32.lib && im-select-integration-tests.exe "{4}"' -f (
+            $setup, $compilerArchitecture, $buildDirectory, $integrationSource, $productionExecutable
+        )
+        & $env:ComSpec /d /c $command
+        if ($LASTEXITCODE -ne 0) {
+            throw "Windows integration test build or execution failed (exit code $LASTEXITCODE)."
+        }
     }
 } finally {
     foreach ($directory in @($buildDirectory, $solutionBuildDirectory)) {
