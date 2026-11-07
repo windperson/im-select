@@ -144,6 +144,15 @@ The im-select.exe is command line program, but it can't work in cmd or powershel
 
 > Note: The git-bash is not required. It's only used to get current input method key, which needed in VSCodeVim's configuration.
 
+The optional locale argument must be a signed decimal integer in the `int` range.
+Leading and trailing whitespace is accepted; extra arguments are ignored. Invalid
+input, a missing foreground window, keyboard-layout query failures, or a failed
+message post produce a diagnostic on stderr and a nonzero exit code. This differs
+from older versions that silently returned success for these failures.
+
+A successful switch command only confirms that Windows queued the request; it
+does not confirm that the target window applied the requested layout.
+
 ## Run tests
 
 ### Windows unit tests
@@ -167,15 +176,15 @@ target, install its MSVC build tools and run, for example:
 
 Supported targets are `arm64`, `x64`, and `x86`; the machine must also be able to
 execute the selected target. No third-party test framework is required. Build
-outputs are created in a temporary directory and removed after each run.
+outputs are created in isolated directories and removed after each run.
 
 These tests compile the existing Windows implementation with mocked Windows APIs
 and console output. They cover language ID extraction (including pointer-width
 handling), foreground-window/thread selection, language-change messages, and CLI
-behavior without changing the real keyboard layout. Characterization tests also
-record current edge cases: permissive `atoi` parsing, ignored extra arguments,
-posting with no foreground window, and ignored `PostMessage` failures. They do
-not verify actual OS input-method switching or introduce ARM64 solution settings.
+behavior without changing the real keyboard layout. They cover invalid locale
+arguments and detectable Windows API failures. An optional interactive test checks
+real message delivery but does not verify actual OS input-method switching. The
+tests do not introduce ARM64 solution settings.
 
 ### To get current keyboard locale
 

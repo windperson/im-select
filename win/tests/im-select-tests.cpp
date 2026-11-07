@@ -22,6 +22,7 @@ struct FakeWindows {
     WPARAM postedWParam = 1;
     LPARAM postedLParam = -1;
     std::string output;
+    std::string errorOutput;
 };
 
 FakeWindows state;
@@ -68,6 +69,12 @@ int fakePrintf(const char* format, int value) {
     state.output += buffer;
     return written;
 }
+
+int fakeFputs(const char* text, FILE* stream) {
+    CHECK(stream == stderr);
+    state.errorOutput += text;
+    return 0;
+}
 }
 
 // Compile the real implementation with Win32 calls replaced only in this test.
@@ -77,9 +84,11 @@ int fakePrintf(const char* format, int value) {
 #undef PostMessage
 #define PostMessage fakePostMessage
 #define printf fakePrintf
+#define fputs fakeFputs
 #define main imSelectMain
 #include "..\im-select\im-select\im-select.cpp"
 #undef main
+#undef fputs
 #undef printf
 #undef PostMessage
 #undef GetKeyboardLayout
@@ -88,7 +97,9 @@ int fakePrintf(const char* format, int value) {
 
 namespace {
 void readsForegroundThreadLayout() {
-    CHECK(getInputMethod() == 1033);
+    int imId = 0;
+    CHECK(getInputMethod(imId));
+    CHECK(imId == 1033);
     CHECK(state.foregroundCalls == 1);
     CHECK(state.threadCalls == 1);
     CHECK(state.queriedWindow == state.foreground);
@@ -101,25 +112,43 @@ void readsForegroundThreadLayout() {
 void extractsOnlyLowLanguageBits() {
     state.layout = reinterpret_cast<HKL>(
         static_cast<ULONG_PTR>(0x12345678F1230411ULL));
-    CHECK(getInputMethod() == 1041);
+    int imId = 0;
+    CHECK(getInputMethod(imId));
+    CHECK(imId == 1041);
 }
 
 void handlesZeroLayout() {
     state.layout = nullptr;
-    CHECK(getInputMethod() == 0);
+    int imId = 123;
+    CHECK(!getInputMethod(imId));
+    CHECK(imId == 123);
     CHECK(state.layoutCalls == 1);
+    CHECK(state.errorOutput == "im-select: could not get keyboard layout\n");
 }
 
 void handlesMissingForegroundWhenReading() {
     state.foreground = nullptr;
-    CHECK(getInputMethod() == 0);
+    int imId = 123;
+    CHECK(!getInputMethod(imId));
+    CHECK(imId == 123);
     CHECK(state.foregroundCalls == 1);
     CHECK(state.threadCalls == 0);
     CHECK(state.layoutCalls == 0);
+    CHECK(state.errorOutput == "im-select: no foreground window\n");
+}
+
+void handlesMissingWindowThread() {
+    state.threadId = 0;
+    int imId = 123;
+    CHECK(!getInputMethod(imId));
+    CHECK(imId == 123);
+    CHECK(state.threadCalls == 1);
+    CHECK(state.layoutCalls == 0);
+    CHECK(state.errorOutput == "im-select: could not get foreground window thread\n");
 }
 
 void postsLanguageChangeToForeground() {
-    switchInputMethod(1041);
+    CHECK(switchInputMethod(1041));
     CHECK(state.foregroundCalls == 1);
     CHECK(state.postCalls == 1);
     CHECK(state.postedWindow == state.foreground);
@@ -133,7 +162,7 @@ void postsLanguageChangeToForeground() {
 void preservesLocaleRangeWhenSwitching() {
     const int locales[] = {0, 65535, -1};
     for (int locale : locales) {
-        switchInputMethod(locale);
+        CHECK(switchInputMethod(locale));
         CHECK(state.postedLParam == static_cast<LPARAM>(locale));
     }
     CHECK(state.postCalls == 3);
@@ -147,12 +176,22 @@ void cliWithoutArgumentsPrintsLanguage() {
     CHECK(state.postCalls == 0);
 }
 
-void cliWithoutForegroundPrintsZero() {
-    state.foreground = nullptr;
+void cliPrintsZeroForNonNullLayoutWithZeroLanguageId() {
+    state.layout = reinterpret_cast<HKL>(static_cast<ULONG_PTR>(0x00010000));
     char program[] = "im-select";
     char* argv[] = {program, nullptr};
     CHECK(imSelectMain(1, argv) == 0);
     CHECK(state.output == "0\n");
+    CHECK(state.errorOutput.empty());
+}
+
+void cliWithoutForegroundReportsError() {
+    state.foreground = nullptr;
+    char program[] = "im-select";
+    char* argv[] = {program, nullptr};
+    CHECK(imSelectMain(1, argv) != 0);
+    CHECK(state.output.empty());
+    CHECK(state.errorOutput == "im-select: no foreground window\n");
     CHECK(state.threadCalls == 0);
     CHECK(state.layoutCalls == 0);
     CHECK(state.postCalls == 0);
@@ -182,42 +221,77 @@ void cliIgnoresAdditionalArguments() {
     CHECK(state.output.empty());
 }
 
-// Characterization tests preserve existing edge cases, not recommended policy.
-void cliPreservesAtoiParsing() {
+void cliAcceptsSignedDecimalAndWhitespace() {
     char program[] = "im-select";
-    char locale[] = " \t+1041suffix";
+    char locale[] = " \t+1041 \t";
     char* argv[] = {program, locale, nullptr};
     CHECK(imSelectMain(2, argv) == 0);
     CHECK(state.postCalls == 1);
     CHECK(state.postedLParam == 1041);
 }
 
-void cliNonNumericLocaleCurrentlyPostsZero() {
+void cliRejectsInvalidLocales() {
     char program[] = "im-select";
-    char locale[] = "invalid";
-    char* argv[] = {program, locale, nullptr};
-    CHECK(imSelectMain(2, argv) == 0);
-    CHECK(state.postCalls == 1);
-    CHECK(state.postedLParam == 0);
+    const char* invalid[] = {"", "  ", "+", "invalid", "1041suffix", "0x409", "2147483648", "-2147483649"};
+    for (const char* locale : invalid) {
+        state = FakeWindows{};
+        char* argv[] = {program, const_cast<char*>(locale), nullptr};
+        CHECK(imSelectMain(2, argv) != 0);
+        CHECK(state.foregroundCalls == 0);
+        CHECK(state.postCalls == 0);
+        CHECK(state.output.empty());
+        CHECK(state.errorOutput == "im-select: invalid decimal locale\n");
+    }
 }
 
-void switchingWithoutForegroundCurrentlyStillPosts() {
+void cliAcceptsIntegerBoundaries() {
+    char program[] = "im-select";
+    const char* locales[] = {"-2147483648", "2147483647", "0"};
+    const LPARAM expected[] = {static_cast<LPARAM>(INT_MIN), static_cast<LPARAM>(INT_MAX), 0};
+    for (int i = 0; i < 3; ++i) {
+        state = FakeWindows{};
+        char* argv[] = {program, const_cast<char*>(locales[i]), nullptr};
+        CHECK(imSelectMain(2, argv) == 0);
+        CHECK(state.postCalls == 1);
+        CHECK(state.postedLParam == expected[i]);
+        CHECK(state.errorOutput.empty());
+    }
+}
+
+void cliSwitchWithoutForegroundReportsError() {
     state.foreground = nullptr;
-    switchInputMethod(1033);
-    CHECK(state.postCalls == 1);
-    CHECK(state.postedWindow == nullptr);
-    CHECK(state.postedMessage == WM_INPUTLANGCHANGEREQUEST);
-    CHECK(state.postedLParam == 1033);
+    char program[] = "im-select";
+    char locale[] = "1033";
+    char* argv[] = {program, locale, nullptr};
+    CHECK(imSelectMain(2, argv) != 0);
+    CHECK(state.postCalls == 0);
+    CHECK(state.output.empty());
+    CHECK(state.errorOutput == "im-select: no foreground window\n");
 }
 
-void cliCurrentlyIgnoresPostFailure() {
+void cliReportsPostFailure() {
     state.postResult = FALSE;
     char program[] = "im-select";
     char locale[] = "1033";
     char* argv[] = {program, locale, nullptr};
-    CHECK(imSelectMain(2, argv) == 0);
+    CHECK(imSelectMain(2, argv) != 0);
     CHECK(state.postCalls == 1);
     CHECK(state.output.empty());
+    CHECK(state.errorOutput == "im-select: could not post input language change request\n");
+}
+
+void cliReportsQueryFailures() {
+    char program[] = "im-select";
+    char* argv[] = {program, nullptr};
+    state.threadId = 0;
+    CHECK(imSelectMain(1, argv) != 0);
+    CHECK(state.output.empty());
+    CHECK(state.errorOutput == "im-select: could not get foreground window thread\n");
+    state = FakeWindows{};
+    state.layout = nullptr;
+    CHECK(imSelectMain(1, argv) != 0);
+    CHECK(state.output.empty());
+    CHECK(state.errorOutput == "im-select: could not get keyboard layout\n");
 }
 }
 
@@ -231,16 +305,20 @@ int main() {
         {"extracts only low language bits", extractsOnlyLowLanguageBits},
         {"handles zero layout", handlesZeroLayout},
         {"handles missing foreground when reading", handlesMissingForegroundWhenReading},
+        {"handles missing window thread", handlesMissingWindowThread},
         {"posts language change to foreground", postsLanguageChangeToForeground},
         {"preserves locale range when switching", preservesLocaleRangeWhenSwitching},
         {"CLI without arguments prints language", cliWithoutArgumentsPrintsLanguage},
-        {"CLI without foreground prints zero", cliWithoutForegroundPrintsZero},
+        {"CLI prints zero for non-null layout with zero language ID", cliPrintsZeroForNonNullLayoutWithZeroLanguageId},
+        {"CLI without foreground reports error", cliWithoutForegroundReportsError},
         {"CLI with locale switches without output", cliWithLocaleSwitchesWithoutOutput},
         {"CLI ignores additional arguments", cliIgnoresAdditionalArguments},
-        {"CLI preserves atoi parsing", cliPreservesAtoiParsing},
-        {"CLI non-numeric locale currently posts zero", cliNonNumericLocaleCurrentlyPostsZero},
-        {"switching without foreground currently still posts", switchingWithoutForegroundCurrentlyStillPosts},
-        {"CLI currently ignores post failure", cliCurrentlyIgnoresPostFailure},
+        {"CLI accepts signed decimal and whitespace", cliAcceptsSignedDecimalAndWhitespace},
+        {"CLI rejects invalid locales", cliRejectsInvalidLocales},
+        {"CLI accepts integer boundaries", cliAcceptsIntegerBoundaries},
+        {"CLI switch without foreground reports error", cliSwitchWithoutForegroundReportsError},
+        {"CLI reports post failure", cliReportsPostFailure},
+        {"CLI reports query failures", cliReportsQueryFailures},
     };
     int passed = 0;
     int failed = 0;

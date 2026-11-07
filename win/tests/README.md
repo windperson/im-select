@@ -53,7 +53,7 @@ Each test prints `PASS` or `FAIL`, followed by a summary:
 ```text
 PASS: reads foreground thread layout
 ...
-14 passed, 0 failed
+18 passed, 0 failed
 ```
 
 The runner throws an error if the production build, test compilation, or a test
@@ -106,11 +106,13 @@ The tests cover:
 - Extracting the low 16-bit language ID, including pointer-width handling.
 - Missing foreground windows and zero keyboard layouts.
 - Posting `WM_INPUTLANGCHANGEREQUEST` with the expected parameters.
-- CLI output, locale parsing, additional arguments, and exit status.
+- CLI output, validated decimal locale parsing, additional arguments, error
+  diagnostics, and exit status.
 
-Characterization tests intentionally preserve current behavior, including
-permissive `atoi` parsing, posting with no foreground window, and ignoring
-`PostMessage` failures. These are baseline observations, not recommended policies.
+The tests verify nonzero exit status and stderr diagnostics for malformed or
+out-of-range input, a missing foreground window, query failures, and a failed
+`PostMessage`. Additional arguments after the first locale are still ignored.
+Successful posting does not prove that the window applied the request.
 
 The mocked tests do not change your keyboard layout or verify real OS input-method
 switching. The production solution build validates the Release configuration for
