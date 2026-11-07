@@ -115,6 +115,10 @@ void extractsOnlyLowLanguageBits() {
     int imId = 0;
     CHECK(getInputMethod(imId));
     CHECK(imId == 1041);
+
+    state.layout = reinterpret_cast<HKL>(~static_cast<ULONG_PTR>(0));
+    CHECK(getInputMethod(imId));
+    CHECK(imId == 65535);
 }
 
 void handlesZeroLayout() {

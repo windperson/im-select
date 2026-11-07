@@ -126,8 +126,6 @@ x86 and x64; it does not validate Debug or an ARM64 production configuration.
   compiler and a Windows SDK are installed.
 - **PowerShell blocks the script:** follow your organization's script-execution
   policy; do not change machine-wide policy just to run these tests.
-- **Pointer-truncation warnings on ARM64/x64:** the current production source
-  emits C4311 and C4302. These warnings do not prevent the tests from running.
 - **Cleanup retry warning:** Windows may briefly lock a test executable after it
   exits. The runner retries cleanup up to five times and reports an error if
   cleanup still fails.
